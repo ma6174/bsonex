@@ -61,7 +61,7 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 	if err != nil {
 		return
 	}
-	return gbson.Unmarshal(one, &v)
+	return gbson.Unmarshal(one, v)
 }
 
 func (d *Decoder) ReadOne() (one []byte, err error) {
@@ -94,5 +94,5 @@ func Marshal(in interface{}) (out []byte, err error) {
 }
 
 func Unmarshal(in []byte, out interface{}) (err error) {
-	return gbson.Unmarshal(in, &out)
+	return gbson.Unmarshal(in, out)
 }
