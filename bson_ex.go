@@ -1,12 +1,45 @@
 package bsonex
 
 import (
+	"encoding/json"
 	"io"
 	"sync"
 
 	"github.com/sbunce/bson"
 	gbson "gopkg.in/mgo.v2/bson"
 )
+
+type M map[string]interface{}
+
+type BSON []byte
+
+func (b BSON) Unmarshal(out interface{}) (err error) {
+	return gbson.Unmarshal(b, out)
+}
+
+func (b BSON) Map() (m M, err error) {
+	err = gbson.Unmarshal(b, &m)
+	return
+}
+
+func (b BSON) ToJson() (s []byte, err error) {
+	m, err := b.Map()
+	if err != nil {
+		return
+	}
+	return json.Marshal(m)
+}
+func (b BSON) MustToJson() (s []byte) {
+	m, err := b.Map()
+	if err != nil {
+		panic(err)
+	}
+	s, err = json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return
+}
 
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r}
@@ -16,7 +49,7 @@ type Decoder struct {
 	r io.Reader
 }
 
-func (d *Decoder) Do(parallel int, f func(b []byte) error) (err error) {
+func (d *Decoder) Do(parallel int, f func(b BSON) error) (err error) {
 	var ch = make(chan []byte, parallel*2)
 	var errCh = make(chan error, parallel*2)
 	var wg sync.WaitGroup
