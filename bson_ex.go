@@ -1,6 +1,7 @@
 package bsonex
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -16,13 +17,13 @@ type M map[string]interface{}
 
 type BSON []byte
 
-func getElement(b BSON) (key string, val Value, next BSON) {
+func getElement(b BSON) (key []byte, val Value, next BSON) {
 	if len(b) == 0 {
-		return "", val, nil
+		return nil, val, nil
 	}
 	elementType := b[0]
 	keyStart, keyEnd := 1, bytes.IndexByte(b, 0x00)
-	key = string(b[keyStart:keyEnd])
+	key = b[keyStart:keyEnd]
 	var valb []byte
 	switch elementType {
 	case 0x1, 0x09, 0x11, 0x12: // double,UTC datetime,Timestamp, 64-bit integer
@@ -70,9 +71,10 @@ func (b BSON) Lookup(key string) (val Value) {
 		panic(e)
 	}()
 	elements := b[4 : len(b)-1]
+	keyb := []byte(key)
 	for elements != nil {
 		ckey, cval, next := getElement(elements)
-		if ckey == key {
+		if bytes.Equal(ckey, keyb) {
 			return cval
 		}
 		elements = next
@@ -105,7 +107,7 @@ func (b BSON) MustToJson() (s []byte) {
 }
 
 func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{r}
+	return &Decoder{bufio.NewReaderSize(r, 4<<20)}
 }
 
 type Decoder struct {
@@ -130,43 +132,50 @@ func (d *Decoder) ForEach(f func(b BSON) error) (err error) {
 }
 
 func (d *Decoder) Do(parallel int, f func(b BSON) error) (err error) {
-	var ch = make(chan []byte, parallel*1000)
-	var errCh = make(chan error, parallel+1)
+	if parallel <= 1 {
+		return d.ForEach(f)
+	}
+	var ch = make(chan [][]byte, parallel*2)
+	var errCh = make(chan error, parallel)
 	var wg sync.WaitGroup
-	var once sync.Once
 	wg.Add(parallel)
-	defer once.Do(func() { close(ch) })
+	defer wg.Wait()
 	for i := 0; i < parallel; i++ {
 		go func() {
 			defer wg.Done()
-			for b := range ch {
-				err := f(b)
-				if err != nil {
-					errCh <- err
-					break
+			for bs := range ch {
+				for _, b := range bs {
+					err := f(b)
+					if err != nil {
+						errCh <- err
+						return
+					}
 				}
 			}
 		}()
 	}
-	go func() {
-		for {
-			one, err := d.ReadOne()
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				errCh <- err
+	defer close(ch)
+	var bs [][]byte
+	for {
+		one, err := d.ReadOne()
+		if err != nil {
+			if err == io.EOF {
 				break
 			}
-			ch <- one
+			return err
 		}
-		once.Do(func() { close(ch) })
-	}()
-	go func() {
-		wg.Wait()
-		close(errCh)
-	}()
-	return <-errCh
+		bs = append(bs, one)
+		if len(bs) == 100 {
+			select {
+			case ch <- bs:
+				bs = nil
+			case err = <-errCh:
+				return err
+			}
+		}
+	}
+	ch <- bs
+	return
 }
 
 func (d *Decoder) Decode(v interface{}) (err error) {
