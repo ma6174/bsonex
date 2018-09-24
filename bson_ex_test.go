@@ -43,6 +43,7 @@ func TestBsonEx(t *testing.T) {
 
 func TestBsonGet(t *testing.T) {
 	now := time.Now()
+	ts, _ := gbson.NewMongoTimestamp(time.Now(), 1)
 	doc := M{
 		"float64":   float64(7.8),                                                   // 0x01
 		"string":    "value of str",                                                 // 0x02
@@ -52,7 +53,8 @@ func TestBsonGet(t *testing.T) {
 		"undefined": gbson.Undefined,                                                // 0x06
 		"objid":     gbson.NewObjectId(),                                            // 0x07
 		"true":      true,                                                           // 0x08
-		"false":     false,                                                          // 0x09
+		"false":     false,                                                          // 0x08
+		"timestamp": ts,                                                             // 0x09
 		"null":      nil,                                                            // 0x0A
 		"regex":     gbson.RegEx{Pattern: "pattern[a-z]+", Options: "is"},           // 0x0B
 		"DBPointer": gbson.DBPointer{Namespace: "test.rs", Id: gbson.NewObjectId()}, // 0x0C
@@ -81,10 +83,10 @@ func TestBsonGet(t *testing.T) {
 	assert.True(t, bs.Lookup("true").Bool())
 	assert.False(t, bs.Lookup("false").Bool())
 	assert.Equal(t, now.Nanosecond()/1e6*1e6, bs.Lookup("time").Time().Nanosecond())
-	p, o := bs.Lookup("regex").Regexp()
-	assert.Equal(t, "pattern[a-z]+", p)
-	assert.Equal(t, "is", o)
+	assert.Equal(t, "pattern[a-z]+", bs.Lookup("regex").Regexp().Pattern)
+	assert.Equal(t, "is", bs.Lookup("regex").Regexp().Options)
 	assert.True(t, bs.Lookup("undefined").IsUndefined())
 	assert.True(t, bs.Lookup("min").IsMinKey())
 	assert.True(t, bs.Lookup("max").IsMaxKey())
+	assert.Equal(t, ts, bs.Lookup("timestamp").MongoTimestamp())
 }

@@ -60,15 +60,13 @@ func getElement(b BSON) (key []byte, val Value, next BSON) {
 	return
 }
 
-// return nil if not found
 func (b BSON) Lookup(key string) (val Value) {
 	defer func() {
 		e := recover()
 		if e == nil {
 			return
 		}
-		log.Println(key, string(b.MustToJson()))
-		panic(e)
+		log.Panic(e, key, string(b.MustToJson()))
 	}()
 	elements := b[4 : len(b)-1]
 	keyb := []byte(key)
