@@ -3,6 +3,7 @@ package bsonex
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"strconv"
 	"time"
@@ -42,7 +43,7 @@ func (v Value) Float64() float64 {
 	return math.Float64frombits(v.Uint64())
 }
 
-func (v Value) String() string {
+func (v Value) Str() string {
 	if len(v.value) == 0 {
 		return ""
 	}
@@ -133,4 +134,58 @@ func (v Value) Type() byte {
 
 func getint(bs []byte) int {
 	return int(binary.LittleEndian.Uint32(bs))
+}
+
+func (v Value) Value() interface{} {
+	switch v.kind {
+	case 0x01:
+		return math.Float64frombits(binary.LittleEndian.Uint64(v.value))
+	case 0x02:
+		return string(v.value[4 : len(v.value)-1])
+	case 0x03:
+		return BSON(v.value)
+	case 0x04:
+		return BSON(v.value)
+	case 0x05:
+		return gbson.Binary{
+			Kind: v.value[4],
+			Data: v.value[5:],
+		}
+	case 0x06:
+		return gbson.Undefined
+	case 0x07:
+		return gbson.ObjectId(v.value)
+	case 0x08:
+		return v.value[0] == 0x1
+	case 0x09:
+		ns := int64(binary.LittleEndian.Uint64(v.value)) * int64(time.Millisecond)
+		return time.Unix(ns/1e9, ns%1e9)
+	case 0x0A:
+		return nil
+	case 0x0B:
+		i := bytes.IndexByte(v.value, 0x00)
+		return gbson.RegEx{
+			Pattern: string(v.value[:i]),
+			Options: string(v.value[i+1 : len(v.value)-1]),
+		}
+	case 0x0C:
+		return gbson.DBPointer{
+			Namespace: string(v.value[4 : len(v.value)-12]),
+			Id:        gbson.ObjectId(v.value[len(v.value)-12:]),
+		}
+	case 0x0D:
+	case 0x10:
+		return binary.LittleEndian.Uint32(v.value)
+	case 0x11:
+	case 0x12:
+		return binary.LittleEndian.Uint64(v.value)
+	case 0x13:
+	case 0xFF:
+		return gbson.MinKey
+	case 0x7F:
+		return gbson.MaxKey
+	default:
+		panic(fmt.Sprintf("invalid bson type %#v", v.kind))
+	}
+	return nil
 }

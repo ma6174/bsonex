@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"sync"
 
 	gbson "github.com/globalsign/mgo/bson"
@@ -62,18 +61,30 @@ func getElement(b BSON) (key []byte, val Value, next BSON) {
 
 func (b BSON) Lookup(key string) (val Value) {
 	defer func() {
-		e := recover()
-		if e == nil {
-			return
+		// TODO
+		if e := recover(); e != nil {
+			panic(e)
 		}
-		log.Panic(e, key, string(b.MustToJson()))
 	}()
 	elements := b[4 : len(b)-1]
 	keyb := []byte(key)
 	for elements != nil {
 		ckey, cval, next := getElement(elements)
-		if bytes.Equal(ckey, keyb) {
+		if ckey != nil && bytes.Equal(ckey, keyb) {
 			return cval
+		}
+		elements = next
+	}
+	return
+}
+
+func (b BSON) ToValueMap() (vals map[string]interface{}) {
+	vals = make(map[string]interface{})
+	elements := b[4 : len(b)-1]
+	for elements != nil {
+		ckey, cval, next := getElement(elements)
+		if ckey != nil {
+			vals[string(ckey)] = cval.Value()
 		}
 		elements = next
 	}

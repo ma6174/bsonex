@@ -41,10 +41,10 @@ func TestBsonEx(t *testing.T) {
 	assert.Equal(t, doc, doc3)
 }
 
-func TestBsonGet(t *testing.T) {
-	now := time.Now()
-	ts, _ := gbson.NewMongoTimestamp(time.Now(), 1)
-	doc := M{
+var (
+	now   = time.Now()
+	ts, _ = gbson.NewMongoTimestamp(time.Now(), 1)
+	doc   = M{
 		"float64":   float64(7.8),                                                   // 0x01
 		"string":    "value of str",                                                 // 0x02
 		"doc":       M{"int64": int64(321)},                                         // 0x03
@@ -66,13 +66,16 @@ func TestBsonGet(t *testing.T) {
 		"min": gbson.MinKey,
 		"max": gbson.MaxKey,
 	}
+)
+
+func TestBsonGet(t *testing.T) {
 	b, err := Marshal(doc)
 	assert.NoError(t, err)
 	bs := BSON(b)
 	assert.Equal(t, int64(123), bs.Lookup("int64").Int64())
 	assert.Equal(t, int32(456), bs.Lookup("int32").Int32())
 	assert.Equal(t, float64(7.8), bs.Lookup("float64").Float64())
-	assert.Equal(t, "value of str", bs.Lookup("string").String())
+	assert.Equal(t, "value of str", bs.Lookup("string").Str())
 	assert.Equal(t, []byte("binary val"), bs.Lookup("binary").Binary().Data)
 	assert.Equal(t, byte(0x0), bs.Lookup("binary").Binary().Type)
 	assert.True(t, bs.Lookup("null").IsNull())
@@ -89,4 +92,62 @@ func TestBsonGet(t *testing.T) {
 	assert.True(t, bs.Lookup("min").IsMinKey())
 	assert.True(t, bs.Lookup("max").IsMaxKey())
 	assert.Equal(t, ts, bs.Lookup("timestamp").MongoTimestamp())
+}
+
+func BenchmarkUnmarshalStruct(b *testing.B) {
+	bs, err := Marshal(doc)
+	assert.NoError(b, err)
+	type Doc struct {
+		Float64 float64 `bson:"float64"`
+		Int64   int64   `bson:"int64"`
+		String  string  `bson:"string"`
+	}
+	var doc Doc
+	for i := 0; i < b.N; i++ {
+		_ = Unmarshal(bs, &doc)
+	}
+}
+
+func BenchmarkLookup(b *testing.B) {
+	bs, err := Marshal(doc)
+	assert.NoError(b, err)
+	bsb := BSON(bs)
+	type Doc struct {
+		Float64 float64 `bson:"float64"`
+		Int64   int64   `bson:"int64"`
+		String  string  `bson:"string"`
+	}
+	var doc Doc
+	for i := 0; i < b.N; i++ {
+		doc.Float64 = bsb.Lookup("float64").Float64()
+		doc.Int64 = bsb.Lookup("int64").Int64()
+		doc.String = bsb.Lookup("string").Str()
+	}
+}
+
+func BenchmarkUnmarshalMap(b *testing.B) {
+	bs, err := Marshal(doc)
+	assert.NoError(b, err)
+	var doc M
+	for i := 0; i < b.N; i++ {
+		_ = Unmarshal(bs, &doc)
+	}
+}
+
+func BenchmarkToMap(b *testing.B) {
+	bs, err := Marshal(doc)
+	bsb := BSON(bs)
+	assert.NoError(b, err)
+	for i := 0; i < b.N; i++ {
+		_, _ = bsb.Map()
+	}
+}
+
+func BenchmarkToValueMap(b *testing.B) {
+	bs, err := Marshal(doc)
+	bsb := BSON(bs)
+	assert.NoError(b, err)
+	for i := 0; i < b.N; i++ {
+		_ = bsb.ToValueMap()
+	}
 }
