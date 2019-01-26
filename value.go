@@ -16,6 +16,13 @@ type Value struct {
 	value []byte
 }
 
+func (v Value) Kind() byte {
+	return v.kind
+}
+func (v Value) RawValue() []byte {
+	return v.value
+}
+
 func (v Value) Uint64() uint64 {
 	if len(v.value) == 0 {
 		return 0
@@ -138,6 +145,8 @@ func getint(bs []byte) int {
 
 func (v Value) Value() interface{} {
 	switch v.kind {
+	case 0x00:
+		return nil
 	case 0x01:
 		return math.Float64frombits(binary.LittleEndian.Uint64(v.value))
 	case 0x02:

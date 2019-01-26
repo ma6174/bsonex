@@ -16,6 +16,24 @@ type M map[string]interface{}
 
 type BSON []byte
 
+type BSONEX struct {
+	BSON
+	offset      int64
+	goroutineID int
+}
+
+func (b *BSONEX) Offset() int64 {
+	return b.offset
+}
+
+func (b *BSONEX) GoroutineID() int {
+	return b.goroutineID
+}
+
+func (b *BSONEX) Size() int {
+	return len(b.BSON)
+}
+
 func getElement(b BSON) (key []byte, val Value, next BSON) {
 	if len(b) == 0 {
 		return nil, val, nil
@@ -123,7 +141,8 @@ type Decoder struct {
 	r io.Reader
 }
 
-func (d *Decoder) ForEach(f func(b BSON) error) (err error) {
+func (d *Decoder) ForEach(f func(b BSONEX) error) (err error) {
+	var offset int64
 	for {
 		one, err := d.ReadOne()
 		if err != nil {
@@ -132,7 +151,8 @@ func (d *Decoder) ForEach(f func(b BSON) error) (err error) {
 			}
 			return err
 		}
-		err = f(one)
+		err = f(BSONEX{BSON: one, offset: offset, goroutineID: 0})
+		offset += int64(len(one))
 		if err != nil {
 			return err
 		}
@@ -140,31 +160,33 @@ func (d *Decoder) ForEach(f func(b BSON) error) (err error) {
 	return
 }
 
-func (d *Decoder) Do(parallel int, f func(b BSON) error) (err error) {
+func (d *Decoder) Do(parallel int, f func(b BSONEX) error) (err error) {
 	if parallel <= 1 {
 		return d.ForEach(f)
 	}
-	var ch = make(chan [][]byte, parallel*2)
+	var ch = make(chan []*BSONEX, parallel*2)
 	var errCh = make(chan error, parallel)
 	var wg sync.WaitGroup
 	wg.Add(parallel)
 	defer wg.Wait()
 	for i := 0; i < parallel; i++ {
-		go func() {
+		go func(id int) {
 			defer wg.Done()
 			for bs := range ch {
 				for _, b := range bs {
-					err := f(b)
+					b.goroutineID = id
+					err := f(*b)
 					if err != nil {
 						errCh <- err
 						return
 					}
 				}
 			}
-		}()
+		}(i)
 	}
 	defer close(ch)
-	var bs [][]byte
+	var bs []*BSONEX
+	var offset int64
 	for {
 		one, err := d.ReadOne()
 		if err != nil {
@@ -173,7 +195,8 @@ func (d *Decoder) Do(parallel int, f func(b BSON) error) (err error) {
 			}
 			return err
 		}
-		bs = append(bs, one)
+		bs = append(bs, &BSONEX{BSON: one, offset: offset})
+		offset += int64(len(one))
 		if len(bs) == 100 {
 			select {
 			case ch <- bs:
