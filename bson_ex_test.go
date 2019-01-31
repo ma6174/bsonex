@@ -2,6 +2,7 @@ package bsonex
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -44,37 +45,51 @@ func TestBsonEx(t *testing.T) {
 var (
 	now   = time.Now()
 	ts, _ = gbson.NewMongoTimestamp(time.Now(), 1)
+	id    = gbson.NewObjectId()
 	doc   = M{
-		"float64":   float64(7.8),                                                   // 0x01
-		"string":    "value of str",                                                 // 0x02
-		"doc":       M{"int64": int64(321)},                                         // 0x03
-		"array":     []int64{22, 33},                                                // 0x04
-		"binary":    []byte("binary val"),                                           // 0x05
-		"undefined": gbson.Undefined,                                                // 0x06
-		"objid":     gbson.NewObjectId(),                                            // 0x07
-		"true":      true,                                                           // 0x08
-		"false":     false,                                                          // 0x08
-		"timestamp": ts,                                                             // 0x09
-		"null":      nil,                                                            // 0x0A
-		"regex":     gbson.RegEx{Pattern: "pattern[a-z]+", Options: "is"},           // 0x0B
-		"DBPointer": gbson.DBPointer{Namespace: "test.rs", Id: gbson.NewObjectId()}, // 0x0C
+		"float64":   float64(-7.8),                                        // 0x01
+		"string":    "value of str",                                       // 0x02
+		"doc":       M{"int64": int64(321)},                               // 0x03
+		"array":     []int64{22, 33},                                      // 0x04
+		"binary":    []byte("binary val"),                                 // 0x05
+		"undefined": gbson.Undefined,                                      // 0x06
+		"objid":     gbson.NewObjectId(),                                  // 0x07
+		"true":      true,                                                 // 0x08
+		"false":     false,                                                // 0x08
+		"timestamp": ts,                                                   // 0x09
+		"null":      nil,                                                  // 0x0A
+		"regex":     gbson.RegEx{Pattern: "pattern[a-z]+", Options: "is"}, // 0x0B
+		"DBPointer": gbson.DBPointer{Namespace: "test.rs", Id: id},        // 0x0C
 		// 0x0D JavaScript code
-		"int32": int32(456), // 0x10
-		"time":  now,        // 0x11
-		"int64": int64(123), // 0x12
+		"int32": int32(-456), // 0x10
+		"time":  now,         // 0x11
+		"int64": int64(-123), // 0x12
 		// 0x13
 		"min": gbson.MinKey,
 		"max": gbson.MaxKey,
 	}
 )
 
+func TestValueMap(t *testing.T) {
+	o, err := Marshal(doc)
+	assert.NoError(t, err)
+	b := BSON(o)
+	vals := b.ToValueMap()
+	assert.Equal(t, doc["float64"], vals["float64"].(float64), "float64")
+	assert.Equal(t, doc["string"], vals["string"].(string), "string")
+	assert.Equal(t, doc["true"], vals["true"].(bool), "bool")
+	assert.Equal(t, doc["false"], vals["false"].(bool), "bool")
+	assert.Equal(t, doc["int32"], int32(vals["int32"].(uint32)), "int32")
+	assert.Equal(t, doc["int64"], int64(vals["int64"].(uint64)), "int64")
+}
+
 func TestBsonGet(t *testing.T) {
 	b, err := Marshal(doc)
 	assert.NoError(t, err)
 	bs := BSON(b)
-	assert.Equal(t, int64(123), bs.Lookup("int64").Int64())
-	assert.Equal(t, int32(456), bs.Lookup("int32").Int32())
-	assert.Equal(t, float64(7.8), bs.Lookup("float64").Float64())
+	assert.Equal(t, int64(-123), bs.Lookup("int64").Int64())
+	assert.Equal(t, int32(-456), bs.Lookup("int32").Int32())
+	assert.Equal(t, float64(-7.8), bs.Lookup("float64").Float64())
 	assert.Equal(t, "value of str", bs.Lookup("string").Str())
 	assert.Equal(t, []byte("binary val"), bs.Lookup("binary").Binary().Data)
 	assert.Equal(t, byte(0x0), bs.Lookup("binary").Binary().Type)
@@ -92,6 +107,45 @@ func TestBsonGet(t *testing.T) {
 	assert.True(t, bs.Lookup("min").IsMinKey())
 	assert.True(t, bs.Lookup("max").IsMaxKey())
 	assert.Equal(t, ts, bs.Lookup("timestamp").MongoTimestamp())
+	assert.Equal(t, "test.rs", bs.Lookup("DBPointer").DBPointer().Namespace)
+	assert.Equal(t, id, bs.Lookup("DBPointer").DBPointer().Id)
+}
+
+func TestDo(t *testing.T) {
+	{
+		pr, pw := io.Pipe()
+		go func() {
+			defer pw.Close()
+			w := NewEncoder(pw)
+			for i := 0; i < 4; i++ {
+				err := w.Encode(M{"i": i})
+				assert.NoError(t, err)
+			}
+		}()
+		var sum int
+		NewDecoder(pr).Do(1, func(b BSONEX) (err error) {
+			sum += int(b.ToValueMap()["i"].(uint32))
+			return
+		})
+		assert.Equal(t, 6, sum)
+	}
+	{
+		pr, pw := io.Pipe()
+		go func() {
+			defer pw.Close()
+			w := NewEncoder(pw)
+			for i := 1; i <= 100; i++ {
+				err := w.Encode(M{"i": i})
+				assert.NoError(t, err)
+			}
+		}()
+		var sum int
+		NewDecoder(pr).Do(10, func(b BSONEX) (err error) {
+			sum += int(b.ToValueMap()["i"].(uint32))
+			return
+		})
+		assert.Equal(t, 5050, sum)
+	}
 }
 
 func BenchmarkUnmarshalStruct(b *testing.B) {

@@ -112,7 +112,7 @@ func (v Value) Regexp() gbson.RegEx {
 
 func (v Value) DBPointer() gbson.DBPointer {
 	return gbson.DBPointer{
-		Namespace: string(v.value[4 : len(v.value)-12]),
+		Namespace: string(v.value[4 : len(v.value)-13]),
 		Id:        gbson.ObjectId(v.value[len(v.value)-12:]),
 	}
 }
