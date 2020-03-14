@@ -2,7 +2,9 @@ package bsonex
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -19,6 +21,7 @@ type Value struct {
 func (v Value) Kind() byte {
 	return v.kind
 }
+
 func (v Value) RawValue() []byte {
 	return v.value
 }
@@ -57,19 +60,12 @@ func (v Value) Str() string {
 	return string(v.value[4 : len(v.value)-1])
 }
 
-type Binary struct {
-	Type byte
-	Data []byte
-}
-
-func (v Value) Binary() Binary {
-	if len(v.value) == 0 {
-		return Binary{}
+func (v Value) String() string {
+	b, err := json.Marshal(v.Value())
+	if err != nil {
+		return fmt.Sprint(v.Value())
 	}
-	return Binary{
-		Type: v.value[4],
-		Data: v.value[5:],
-	}
+	return string(b)
 }
 
 func (v Value) Document() BSON {
@@ -139,62 +135,82 @@ func (v Value) Type() byte {
 	return v.kind
 }
 
+func (v Value) Binary() Binary {
+	if len(v.value) == 0 {
+		return Binary{gbson.Binary{}}
+	}
+	return Binary{gbson.Binary{
+		Kind: v.value[4],
+		Data: v.value[5:],
+	}}
+}
+
 func getint(bs []byte) int {
 	return int(binary.LittleEndian.Uint32(bs))
 }
 
+type Binary struct {
+	gbson.Binary
+}
+
+func (b Binary) MarshalJSON() (bs []byte, err error) {
+	s := base64.StdEncoding.EncodeToString(b.Data)
+	return json.Marshal(s)
+}
+
 func (v Value) Value() interface{} {
 	switch v.kind {
-	case 0x00:
-		return nil
-	case 0x01:
+	case 0x01: // 64-bit binary floating point
 		return math.Float64frombits(binary.LittleEndian.Uint64(v.value))
-	case 0x02:
+	case 0x02: // UTF-8 string
 		return string(v.value[4 : len(v.value)-1])
-	case 0x03:
-		return BSON(v.value)
-	case 0x04:
-		return BSON(v.value)
-	case 0x05:
-		return gbson.Binary{
-			Kind: v.value[4],
-			Data: v.value[5:],
-		}
-	case 0x06:
+	case 0x03: // Embedded document
+		return BSON(v.value).ToValueMap()
+	case 0x04: // Array
+		return BSON(v.value).toValueArray()
+	case 0x05: // Binary data
+		return Binary{gbson.Binary{Kind: v.value[4], Data: v.value[5:]}}
+	case 0x06: // Undefined (value) — Deprecated
 		return gbson.Undefined
-	case 0x07:
+	case 0x07: // ObjectId
 		return gbson.ObjectId(v.value)
-	case 0x08:
+	case 0x08: // Boolean
 		return v.value[0] == 0x1
-	case 0x09:
+	case 0x09: // UTC datetime
 		ns := int64(binary.LittleEndian.Uint64(v.value)) * int64(time.Millisecond)
 		return time.Unix(ns/1e9, ns%1e9)
-	case 0x0A:
+	case 0x0A: // Null value
 		return nil
-	case 0x0B:
+	case 0x0B: // Regular expression
 		i := bytes.IndexByte(v.value, 0x00)
 		return gbson.RegEx{
 			Pattern: string(v.value[:i]),
 			Options: string(v.value[i+1 : len(v.value)-1]),
 		}
-	case 0x0C:
+	case 0x0C: // DBPointer — Deprecated
 		return gbson.DBPointer{
-			Namespace: string(v.value[4 : len(v.value)-12]),
+			Namespace: string(v.value[4 : len(v.value)-12-1]),
 			Id:        gbson.ObjectId(v.value[len(v.value)-12:]),
 		}
-	case 0x0D:
-	case 0x10:
+	case 0x0D: // JavaScript code
+		panic("not supported")
+	case 0x0E: // Symbol. Deprecated
+		panic("not supported")
+	case 0x0F: // JavaScript code w/ scope
+		panic("not supported")
+	case 0x10: // 32-bit integer
 		return binary.LittleEndian.Uint32(v.value)
-	case 0x11:
-	case 0x12:
+	case 0x11: // Timestamp
+		return gbson.MongoTimestamp(binary.LittleEndian.Uint64(v.value))
+	case 0x12: // 64-bit integer
 		return binary.LittleEndian.Uint64(v.value)
-	case 0x13:
-	case 0xFF:
+	case 0x13: // 128-bit decimal floating point
+		panic("not supported")
+	case 0xFF: // Min key
 		return gbson.MinKey
-	case 0x7F:
+	case 0x7F: // Max key
 		return gbson.MaxKey
 	default:
 		panic(fmt.Sprintf("invalid bson type %#v", v.kind))
 	}
-	return nil
 }

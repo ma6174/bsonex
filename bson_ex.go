@@ -16,6 +16,10 @@ type M map[string]interface{}
 
 type BSON []byte
 
+func (b BSON) String() string {
+	return string(BSONEX{BSON: b}.MustToJson())
+}
+
 type BSONEX struct {
 	BSON
 	offset      int64
@@ -32,6 +36,10 @@ func (b *BSONEX) GoroutineID() int {
 
 func (b *BSONEX) Size() int {
 	return len(b.BSON)
+}
+
+func (b BSONEX) String() string {
+	return string(b.MustToJson())
 }
 
 func getElement(b BSON) (key []byte, val Value, next BSON) {
@@ -109,6 +117,18 @@ func (b BSON) ToValueMap() (vals map[string]interface{}) {
 	return
 }
 
+func (b BSON) toValueArray() (arr []interface{}) {
+	elements := b[4 : len(b)-1]
+	for elements != nil {
+		ckey, cval, next := getElement(elements)
+		if ckey != nil {
+			arr = append(arr, cval.Value())
+		}
+		elements = next
+	}
+	return
+}
+
 func (b BSON) Unmarshal(out interface{}) (err error) {
 	return gbson.Unmarshal(b, out)
 }
@@ -119,12 +139,9 @@ func (b BSON) Map() (m M, err error) {
 }
 
 func (b BSON) ToJson() (s []byte, err error) {
-	m, err := b.Map()
-	if err != nil {
-		return
-	}
-	return json.Marshal(m)
+	return json.Marshal(b.ToValueMap())
 }
+
 func (b BSON) MustToJson() (s []byte) {
 	s, err := b.ToJson()
 	if err != nil {
@@ -219,8 +236,7 @@ func (d *Decoder) Decode(v interface{}) (err error) {
 }
 
 func (d *Decoder) ReadOne() (one BSON, err error) {
-	b, err := bson.ReadOne(d.r)
-	return BSON(b), err
+	return ReadOne(d.r)
 }
 
 func NewEncoder(w io.Writer) *gbson.Encoder {

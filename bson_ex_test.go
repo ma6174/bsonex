@@ -2,13 +2,14 @@ package bsonex
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"testing"
 	"time"
 
 	gbson "github.com/globalsign/mgo/bson"
-	"github.com/golib/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 type Doc struct {
@@ -70,6 +71,13 @@ var (
 	}
 )
 
+func TestJson(t *testing.T) {
+	o, err := Marshal(doc)
+	assert.NoError(t, err)
+	b := BSON(o)
+	fmt.Println(b)
+}
+
 func TestValueMap(t *testing.T) {
 	o, err := Marshal(doc)
 	assert.NoError(t, err)
@@ -92,7 +100,7 @@ func TestBsonGet(t *testing.T) {
 	assert.Equal(t, float64(-7.8), bs.Lookup("float64").Float64())
 	assert.Equal(t, "value of str", bs.Lookup("string").Str())
 	assert.Equal(t, []byte("binary val"), bs.Lookup("binary").Binary().Data)
-	assert.Equal(t, byte(0x0), bs.Lookup("binary").Binary().Type)
+	assert.Equal(t, byte(0x0), bs.Lookup("binary").Binary().Kind)
 	assert.True(t, bs.Lookup("null").IsNull())
 	assert.Equal(t, int64(321), bs.Lookup("doc").Document().Lookup("int64").Int64())
 	assert.Equal(t, int64(22), bs.Lookup("array").ArrayOf(0).Int64())
