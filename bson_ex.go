@@ -22,16 +22,16 @@ func (b BSON) String() string {
 
 type BSONEX struct {
 	BSON
-	offset      int64
-	goroutineID int
+	offset   int64
+	runnerID int
 }
 
 func (b *BSONEX) Offset() int64 {
 	return b.offset
 }
 
-func (b *BSONEX) GoroutineID() int {
-	return b.goroutineID
+func (b *BSONEX) RunnerID() int {
+	return b.runnerID
 }
 
 func (b *BSONEX) Size() int {
@@ -168,7 +168,7 @@ func (d *Decoder) ForEach(f func(b BSONEX) error) (err error) {
 			}
 			return err
 		}
-		err = f(BSONEX{BSON: one, offset: offset, goroutineID: 0})
+		err = f(BSONEX{BSON: one, offset: offset, runnerID: 0})
 		offset += int64(len(one))
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func (d *Decoder) Do(parallel int, f func(b BSONEX) error) (err error) {
 			defer wg.Done()
 			for bs := range ch {
 				for _, b := range bs {
-					b.goroutineID = id
+					b.runnerID = id
 					err := f(*b)
 					if err != nil {
 						errCh <- err
