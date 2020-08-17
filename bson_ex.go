@@ -104,6 +104,29 @@ func (b BSON) Lookup(key string) (val Value) {
 	return
 }
 
+type toSearchValue struct {
+	b []byte
+}
+
+func NewToSearchValue(v interface{}) (b toSearchValue, err error) {
+	if s, ok := v.(string); ok {
+		return toSearchValue{[]byte(s)}, nil
+	}
+	bs, err := gbson.Marshal(gbson.M{"v": v})
+	if err != nil {
+		return
+	}
+	// bson_size(4) + type(1) + key(v,1) + \0 (1) ...value.... \0 (1)
+	return toSearchValue{bs[4+1+1+1 : len(bs)-1]}, nil
+}
+
+// Contains 可以在未解析BSON的时候先快速判断一下是否包含待查找的内容，
+// 避免执行每个文档都执行Unmarshal加快查找速度。
+// 需要注意的是这里查找并不精确，必要的情况下仍然需要再次Unmarshal再确认一次。
+func (b BSON) FastContains(v toSearchValue) bool {
+	return bytes.Contains(b, v.b)
+}
+
 func (b BSON) ToValueMap() (vals map[string]interface{}) {
 	vals = make(map[string]interface{})
 	elements := b[4 : len(b)-1]

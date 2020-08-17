@@ -156,6 +156,34 @@ func TestDo(t *testing.T) {
 	}
 }
 
+func TestContains(t *testing.T) {
+	var containsCases = map[interface{}]interface{}{
+		"abc": gbson.M{"abc": "def"},
+		"a":   gbson.M{"abc": "def"},
+		"def": gbson.M{"abc": "def"},
+		"d":   gbson.M{"abc": "def"},
+		123:   gbson.M{"abc": 123},
+		3.14:  gbson.M{"abc": 3.14},
+	}
+	for k, v := range containsCases {
+		bs, err := gbson.Marshal(v)
+		assert.NoError(t, err)
+		toSearchValue, err := NewToSearchValue(k)
+		assert.NoError(t, err)
+		assert.True(t, BSON(bs).FastContains(toSearchValue), k, v)
+	}
+	// search doc
+	{
+		doc := gbson.M{"abc": "sdkf"}
+		bs, err := gbson.Marshal(gbson.M{"k": doc})
+		assert.NoError(t, err)
+		toSearchValue, err := NewToSearchValue(doc)
+		assert.NoError(t, err)
+		assert.True(t, BSON(bs).FastContains(toSearchValue), doc)
+	}
+
+}
+
 func BenchmarkUnmarshalStruct(b *testing.B) {
 	bs, err := Marshal(doc)
 	assert.NoError(b, err)
