@@ -230,8 +230,8 @@ func BenchmarkUnmarshalMap(b *testing.B) {
 
 func BenchmarkToMap(b *testing.B) {
 	bs, err := Marshal(doc)
-	bsb := BSON(bs)
 	assert.NoError(b, err)
+	bsb := BSON(bs)
 	for i := 0; i < b.N; i++ {
 		_, _ = bsb.Map()
 	}
@@ -239,9 +239,19 @@ func BenchmarkToMap(b *testing.B) {
 
 func BenchmarkToValueMap(b *testing.B) {
 	bs, err := Marshal(doc)
-	bsb := BSON(bs)
 	assert.NoError(b, err)
+	bsb := BSON(bs)
 	for i := 0; i < b.N; i++ {
 		_ = bsb.ToValueMap()
 	}
+}
+
+func TestIsEmpty(t *testing.T) {
+	bs, err := Marshal(doc)
+	assert.NoError(t, err)
+	bsb := BSON(bs)
+	assert.True(t, bsb.Lookup("x").IsEmpty())
+	assert.False(t, bsb.Lookup("doc").IsEmpty())
+	assert.False(t, bsb.Lookup("doc.int64").IsEmpty())
+	assert.True(t, bsb.Lookup("doc.x").IsEmpty())
 }

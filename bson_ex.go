@@ -102,12 +102,6 @@ func (b BSON) Lookup(key string) (val Value) {
 }
 
 func (b BSON) lookupOne(key string) (val Value) {
-	defer func() {
-		// TODO
-		if e := recover(); e != nil {
-			panic(e)
-		}
-	}()
 	elements := b[4 : len(b)-1]
 	keyb := []byte(key)
 	for elements != nil {

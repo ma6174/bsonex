@@ -18,6 +18,10 @@ type Value struct {
 	value []byte
 }
 
+func (v Value) IsEmpty() bool {
+	return v.kind == 0x00
+}
+
 func (v Value) Kind() byte {
 	return v.kind
 }
