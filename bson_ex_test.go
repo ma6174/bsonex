@@ -117,6 +117,10 @@ func TestBsonGet(t *testing.T) {
 	assert.Equal(t, ts, bs.Lookup("timestamp").MongoTimestamp())
 	assert.Equal(t, "test.rs", bs.Lookup("DBPointer").DBPointer().Namespace)
 	assert.Equal(t, id, bs.Lookup("DBPointer").DBPointer().Id)
+	assert.Equal(t, int64(321), bs.Lookup("doc.int64").Int64(), "Lookup many")
+	assert.Equal(t, int64(0), bs.Lookup("doc.x").Int64(), "Lookup many")
+	assert.Equal(t, int64(0), bs.Lookup("doc.x.x").Int64(), "Lookup many")
+	assert.Equal(t, int64(0), bs.Lookup(".").Int64(), "Lookup many")
 }
 
 func TestDo(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	gbson "github.com/globalsign/mgo/bson"
@@ -86,6 +87,21 @@ func getElement(b BSON) (key []byte, val Value, next BSON) {
 }
 
 func (b BSON) Lookup(key string) (val Value) {
+	if key == "" {
+		return
+	}
+	val = Value{kind: 0x03, value: b}
+	sp := strings.Split(key, ".")
+	for _, k := range sp {
+		val = BSON(val.value).lookupOne(k)
+		if val.kind == 0 {
+			return
+		}
+	}
+	return
+}
+
+func (b BSON) lookupOne(key string) (val Value) {
 	defer func() {
 		// TODO
 		if e := recover(); e != nil {
