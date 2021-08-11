@@ -34,9 +34,15 @@ func (v Value) Uint64() uint64 {
 	if len(v.value) == 0 {
 		return 0
 	}
+	if v.kind == 0x10 { // 32-bit integer
+		return uint64(v.Uint32())
+	}
 	return binary.LittleEndian.Uint64(v.value)
 }
 func (v Value) Int64() int64 {
+	if v.kind == 0x10 { // 32-bit integer
+		return int64(v.Int32())
+	}
 	return int64(v.Uint64())
 }
 

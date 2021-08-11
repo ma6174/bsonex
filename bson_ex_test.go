@@ -97,6 +97,7 @@ func TestBsonGet(t *testing.T) {
 	bs := BSON(b)
 	assert.Equal(t, int64(-123), bs.Lookup("int64").Int64())
 	assert.Equal(t, int32(-456), bs.Lookup("int32").Int32())
+	assert.Equal(t, int64(-456), bs.Lookup("int32").Int64())
 	assert.Equal(t, float64(-7.8), bs.Lookup("float64").Float64())
 	assert.Equal(t, "value of str", bs.Lookup("string").Str())
 	assert.Equal(t, []byte("binary val"), bs.Lookup("binary").Binary().Data)
