@@ -2,7 +2,6 @@ package bsonex
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -44,8 +43,8 @@ func TestBsonEx(t *testing.T) {
 }
 
 var (
-	now   = time.Now()
-	ts, _ = gbson.NewMongoTimestamp(time.Now(), 1)
+	now   = time.UnixMilli(time.Now().UnixMilli())
+	ts, _ = gbson.NewMongoTimestamp(now, 1)
 	id    = gbson.NewObjectId()
 	doc   = M{
 		"float64":   float64(-7.8),                                        // 0x01
@@ -72,10 +71,15 @@ var (
 )
 
 func TestJson(t *testing.T) {
+	bj, err := json.Marshal(doc)
+	assert.NoError(t, err)
 	o, err := Marshal(doc)
 	assert.NoError(t, err)
 	b := BSON(o)
-	fmt.Println(b)
+	assert.Equal(t, string(bj), b.String())
+	bj2, err := json.Marshal(b.ToValueMap())
+	assert.NoError(t, err)
+	assert.Equal(t, string(bj2), b.String())
 }
 
 func TestValueMap(t *testing.T) {
@@ -87,8 +91,8 @@ func TestValueMap(t *testing.T) {
 	assert.Equal(t, doc["string"], vals["string"].(string), "string")
 	assert.Equal(t, doc["true"], vals["true"].(bool), "bool")
 	assert.Equal(t, doc["false"], vals["false"].(bool), "bool")
-	assert.Equal(t, doc["int32"], int32(vals["int32"].(uint32)), "int32")
-	assert.Equal(t, doc["int64"], int64(vals["int64"].(uint64)), "int64")
+	assert.Equal(t, doc["int32"], int32(vals["int32"].(int32)), "int32")
+	assert.Equal(t, doc["int64"], int64(vals["int64"].(int64)), "int64")
 }
 
 func TestBsonGet(t *testing.T) {
@@ -137,7 +141,7 @@ func TestDo(t *testing.T) {
 		}()
 		var sum int
 		NewDecoder(pr).Do(1, func(b BSONEX) (err error) {
-			sum += int(b.Map()["i"].(uint32))
+			sum += int(b.Map()["i"].(int32))
 			return
 		})
 		assert.Equal(t, 6, sum)
@@ -154,7 +158,7 @@ func TestDo(t *testing.T) {
 		}()
 		var sum int
 		NewDecoder(pr).Do(10, func(b BSONEX) (err error) {
-			sum += int(b.Map()["i"].(uint32))
+			sum += int(b.Map()["i"].(int32))
 			return
 		})
 		assert.Equal(t, 5050, sum)

@@ -131,7 +131,20 @@ func (v Value) Document() BSON {
 	return BSON(v.valueData)
 }
 
-func (v Value) Array() (a []Value) {
+func (v Value) Map() M {
+	return v.Document().Map()
+}
+
+func (v Value) ValueMap() map[string]Value {
+	return v.Document().ToValueMap()
+}
+
+func (v Value) Array() (a []interface{}) {
+	v.checkType(TypeArray)
+	return BSON(v.valueData).Array()
+}
+
+func (v Value) ValueArray() (a []Value) {
 	v.checkType(TypeArray)
 	return BSON(v.valueData).ToValueArray()
 }
@@ -229,14 +242,22 @@ func (b Binary) MarshalJSON() (bs []byte, err error) {
 	return json.Marshal(s)
 }
 
-func (v Value) Value() interface{} {
+func (v Value) MarshalJSON() (bs []byte, err error) {
+	return json.Marshal(v.Value())
+}
+
+func (v Value) MarshalBSON() (bs []byte, err error) {
+	return gbson.Marshal(v.Value())
+}
+
+func (v Value) Value() (r interface{}) {
 	switch v.valueType {
 	case TypeDouble:
 		return v.Float64()
 	case TypeString:
 		return v.Str()
 	case TypeDocument:
-		return v.Document()
+		return v.Map()
 	case TypeArray:
 		return v.Array()
 	case TypeBinary:
@@ -258,11 +279,11 @@ func (v Value) Value() interface{} {
 	case TypeJSCode, TypeSymbol, TypeJSCodeScope, TypeDecimal128:
 		panic("not supported")
 	case TypeInt32:
-		return v.Uint32()
+		return v.Int32()
 	case TypeTimestamp:
 		return v.MongoTimestamp()
 	case TypeInt64:
-		return v.Uint64()
+		return v.Int64()
 	case TypeMinKey:
 		return gbson.MinKey
 	case TypeMaxKey:
