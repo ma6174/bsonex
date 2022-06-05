@@ -52,32 +52,33 @@ func getElement(b BSON) (key []byte, val Value, next BSON) {
 	key = b[keyStart:keyEnd]
 	var valb []byte
 	switch elementType {
-	case 0x1, 0x09, 0x11, 0x12: // double,UTC datetime,Timestamp, 64-bit integer
+	case TypeDouble, TypeDatetime, TypeTimestamp, TypeInt64:
 		valb = b[keyEnd+1 : keyEnd+1+8]
-	case 0x2, 0x0D, 0x0E, 0x0F: // string, JavaScript code, Symbol,JavaScript code w/ scope
+	case TypeString, TypeJSCode, TypeSymbol, TypeJSCodeScope:
 		strLen := getint(b[keyEnd+1 : keyEnd+1+4])
 		valb = b[keyEnd+1 : keyEnd+1+4+strLen]
-	case 0x3, 0x4: // Embedded document, Array
+	case TypeDocument, TypeArray:
 		Len := getint(b[keyEnd+1 : keyEnd+1+4])
 		valb = b[keyEnd+1 : keyEnd+1+Len]
-	case 0x5: // binary
+	case TypeBinary:
 		Len := getint(b[keyEnd+1 : keyEnd+1+4])
 		valb = b[keyEnd+1 : keyEnd+1+4+1+Len]
-	case 0x06, 0x0A, 0xFF, 0x7F: // Undefined, null value, 	Min key, Max key
-	case 0x07: // 	ObjectId
+	case TypeUndefined, TypeNull, TypeMinKey, TypeMaxKey:
+		// no value
+	case TypeObjectId:
 		valb = b[keyEnd+1 : keyEnd+1+12]
-	case 0x08: // bool
+	case TypeBoolean:
 		valb = b[keyEnd+1 : keyEnd+1+1]
-	case 0x0B: // Regular expression
+	case TypeRegex:
 		i := bytes.IndexByte(b[keyEnd+1:], 0x00)
 		i2 := bytes.IndexByte(b[keyEnd+1+i+1:], 0x00)
 		valb = b[keyEnd+1 : keyEnd+1+i+1+i2+1]
-	case 0x0C: // DBPointer
+	case TypeDBPointer:
 		strLen := getint(b[keyEnd+1 : keyEnd+1+4])
 		valb = b[keyEnd+1 : keyEnd+1+4+int(strLen)+12]
-	case 0x10: // 32-bit integer
+	case TypeInt32:
 		valb = b[keyEnd+1 : keyEnd+1+4]
-	case 0x13: // 128-bit decimal floating point
+	case TypeDecimal128:
 		valb = b[keyEnd+1 : keyEnd+1+16]
 	default:
 		panic(fmt.Sprintf("invalid bson type %#v", elementType))
@@ -90,11 +91,11 @@ func (b BSON) Lookup(key string) (val Value) {
 	if key == "" {
 		return
 	}
-	val = Value{kind: 0x03, value: b}
+	val = Value{valueType: TypeDocument, valueData: b}
 	sp := strings.Split(key, ".")
 	for _, k := range sp {
-		val = BSON(val.value).lookupOne(k)
-		if val.kind == 0 {
+		val = BSON(val.valueData).lookupOne(k)
+		if val.valueType == TypeEmpty {
 			return
 		}
 	}
@@ -130,15 +131,15 @@ func NewToSearchValue(v interface{}) (b toSearchValue, err error) {
 	return toSearchValue{bs[4+1+1+1 : len(bs)-1]}, nil
 }
 
-// Contains 可以在未解析BSON的时候先快速判断一下是否包含待查找的内容，
+// FastContains 可以在未解析BSON的时候先快速判断一下是否包含待查找的内容，
 // 避免执行每个文档都执行Unmarshal加快查找速度。
 // 需要注意的是这里查找并不精确，必要的情况下仍然需要再次Unmarshal再确认一次。
 func (b BSON) FastContains(v toSearchValue) bool {
 	return bytes.Contains(b, v.b)
 }
 
-func (b BSON) ToValueMap() (vals map[string]interface{}) {
-	vals = make(map[string]interface{})
+func (b BSON) Map() (vals M) {
+	vals = make(M)
 	elements := b[4 : len(b)-1]
 	for elements != nil {
 		ckey, cval, next := getElement(elements)
@@ -150,7 +151,20 @@ func (b BSON) ToValueMap() (vals map[string]interface{}) {
 	return
 }
 
-func (b BSON) toValueArray() (arr []interface{}) {
+func (b BSON) ToValueMap() (vals map[string]Value) {
+	vals = make(map[string]Value)
+	elements := b[4 : len(b)-1]
+	for elements != nil {
+		ckey, cval, next := getElement(elements)
+		if ckey != nil {
+			vals[string(ckey)] = cval
+		}
+		elements = next
+	}
+	return
+}
+
+func (b BSON) Array() (arr []interface{}) {
 	elements := b[4 : len(b)-1]
 	for elements != nil {
 		ckey, cval, next := getElement(elements)
@@ -162,17 +176,24 @@ func (b BSON) toValueArray() (arr []interface{}) {
 	return
 }
 
+func (b BSON) ToValueArray() (arr []Value) {
+	elements := b[4 : len(b)-1]
+	for elements != nil {
+		ckey, cval, next := getElement(elements)
+		if ckey != nil {
+			arr = append(arr, cval)
+		}
+		elements = next
+	}
+	return
+}
+
 func (b BSON) Unmarshal(out interface{}) (err error) {
 	return gbson.Unmarshal(b, out)
 }
 
-func (b BSON) Map() (m M, err error) {
-	err = gbson.Unmarshal(b, &m)
-	return
-}
-
 func (b BSON) ToJson() (s []byte, err error) {
-	return json.Marshal(b.ToValueMap())
+	return json.Marshal(b.Map())
 }
 
 func (b BSON) MustToJson() (s []byte) {
@@ -201,7 +222,7 @@ func (d *Decoder) ForEach(f func(b BSONEX) error) (err error) {
 			}
 			return err
 		}
-		err = f(BSONEX{BSON: one, offset: offset, runnerID: 0})
+		err = f(BSONEX{BSON: one, offset: offset})
 		offset += int64(len(one))
 		if err != nil {
 			return err
@@ -214,8 +235,8 @@ func (d *Decoder) Do(parallel int, f func(b BSONEX) error) (err error) {
 	if parallel <= 1 {
 		return d.ForEach(f)
 	}
-	var ch = make(chan []*BSONEX, parallel*2)
-	var errCh = make(chan error, parallel)
+	ch := make(chan []*BSONEX, parallel*2)
+	errCh := make(chan error, parallel)
 	var wg sync.WaitGroup
 	wg.Add(parallel)
 	defer wg.Wait()

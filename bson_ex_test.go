@@ -82,7 +82,7 @@ func TestValueMap(t *testing.T) {
 	o, err := Marshal(doc)
 	assert.NoError(t, err)
 	b := BSON(o)
-	vals := b.ToValueMap()
+	vals := b.Map()
 	assert.Equal(t, doc["float64"], vals["float64"].(float64), "float64")
 	assert.Equal(t, doc["string"], vals["string"].(string), "string")
 	assert.Equal(t, doc["true"], vals["true"].(bool), "bool")
@@ -137,7 +137,7 @@ func TestDo(t *testing.T) {
 		}()
 		var sum int
 		NewDecoder(pr).Do(1, func(b BSONEX) (err error) {
-			sum += int(b.ToValueMap()["i"].(uint32))
+			sum += int(b.Map()["i"].(uint32))
 			return
 		})
 		assert.Equal(t, 6, sum)
@@ -154,7 +154,7 @@ func TestDo(t *testing.T) {
 		}()
 		var sum int
 		NewDecoder(pr).Do(10, func(b BSONEX) (err error) {
-			sum += int(b.ToValueMap()["i"].(uint32))
+			sum += int(b.Map()["i"].(uint32))
 			return
 		})
 		assert.Equal(t, 5050, sum)
@@ -162,7 +162,7 @@ func TestDo(t *testing.T) {
 }
 
 func TestContains(t *testing.T) {
-	var containsCases = map[interface{}]interface{}{
+	containsCases := map[interface{}]interface{}{
 		"abc": gbson.M{"abc": "def"},
 		"a":   gbson.M{"abc": "def"},
 		"def": gbson.M{"abc": "def"},
@@ -186,7 +186,6 @@ func TestContains(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, BSON(bs).FastContains(toSearchValue), doc)
 	}
-
 }
 
 func BenchmarkUnmarshalStruct(b *testing.B) {
@@ -234,7 +233,7 @@ func BenchmarkToMap(b *testing.B) {
 	assert.NoError(b, err)
 	bsb := BSON(bs)
 	for i := 0; i < b.N; i++ {
-		_, _ = bsb.Map()
+		_ = bsb.Map()
 	}
 }
 
