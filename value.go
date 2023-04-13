@@ -57,11 +57,14 @@ func (v Value) RawValue() []byte {
 	return v.valueData
 }
 
-func (v Value) checkType(expect byte) {
-	if expect != v.valueType {
-		panic(fmt.Sprintf("invalid type, expect: %v, real: %v",
-			expect, v.valueType))
+func (v Value) checkType(expects ...byte) {
+	for _, e := range expects {
+		if e == v.valueType {
+			return
+		}
 	}
+	panic(fmt.Sprintf("invalid type, expect: %v, real: %v",
+		expects, v.valueType))
 }
 
 func (v Value) checkValueLength(expect int) {
@@ -127,7 +130,7 @@ func (v Value) String() string {
 }
 
 func (v Value) Document() BSON {
-	v.checkType(TypeDocument)
+	v.checkType(TypeDocument, TypeArray)
 	return BSON(v.valueData)
 }
 
