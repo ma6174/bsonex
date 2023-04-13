@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -57,6 +59,7 @@ var (
 	valueType = flag.String("t", "string", "value type: "+strings.Join(ps.All(), ","))
 	key       = flag.String("k", "", "key")
 	process   = flag.Int("p", 1, "process")
+	outType   = flag.String("o", "json", "output format, json or bson")
 )
 
 func main() {
@@ -70,20 +73,29 @@ func main() {
 	if err != nil {
 		log.Panicln(err)
 	}
+	out := bufio.NewWriterSize(os.Stdout, 1<<20)
 	err = bsonex.NewDecoder(os.Stdin).Do(*process, func(b bsonex.BSONEX) (err error) {
 		if !b.FastContains(b1) {
 			return
 		}
-		if *key != "" {
-			if reflect.DeepEqual(b.Lookup(*key).Value(), v) {
-				_, err = os.Stdout.Write(append(b.MustToJson(), '\n'))
+		if *key == "" || reflect.DeepEqual(b.Lookup(*key).Value(), v) {
+			switch *outType {
+			case "json":
+				out.Write(b.MustToJson())
+				err = out.WriteByte('\n')
+			case "bson":
+				_, err = out.Write(b.BSON)
+			default:
+				err = errors.New("invalid type")
 			}
-			return
 		}
-		_, err = os.Stdout.Write(append(b.MustToJson(), '\n'))
 		return
 	})
 	if err != nil {
-		log.Panicln(err)
+		log.Fatalln(err)
+	}
+	err = out.Flush()
+	if err != nil {
+		log.Fatalln(err)
 	}
 }
