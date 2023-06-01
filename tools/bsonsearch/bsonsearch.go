@@ -56,10 +56,11 @@ var ps = parsers{
 }
 
 var (
-	valueType = flag.String("t", "string", "value type: "+strings.Join(ps.All(), ","))
-	key       = flag.String("k", "", "key")
-	process   = flag.Int("p", 1, "process")
-	outType   = flag.String("o", "json", "output format, json or bson")
+	valueType    = flag.String("t", "string", "value type: "+strings.Join(ps.All(), ","))
+	key          = flag.String("k", "", "key")
+	process      = flag.Int("p", 1, "process")
+	strFullMatch = flag.Bool("strfullmatch", false, "full match string")
+	outType      = flag.String("o", "json", "output format, json or bson")
 )
 
 func main() {
@@ -78,7 +79,14 @@ func main() {
 		if !b.FastContains(b1) {
 			return
 		}
-		if *key == "" || reflect.DeepEqual(b.Lookup(*key).Value(), v) {
+		isMatch := func() bool {
+			str, ok := v.(string)
+			if !ok || *strFullMatch {
+				return reflect.DeepEqual(b.Lookup(*key).Value(), v)
+			}
+			return strings.Contains(b.Lookup(*key).Str(), str)
+		}()
+		if *key == "" || isMatch {
 			switch *outType {
 			case "json":
 				out.Write(b.MustToJson())
