@@ -85,8 +85,8 @@ func main() {
 				return reflect.DeepEqual(b.Lookup(*key).Value(), v)
 			}
 			return strings.Contains(b.Lookup(*key).Str(), str)
-		}()
-		if *key == "" || isMatch {
+		}
+		if *key == "" || isMatch() {
 			switch *outType {
 			case "json":
 				out.Write(b.MustToJson())
