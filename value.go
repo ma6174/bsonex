@@ -11,9 +11,29 @@ import (
 	"time"
 
 	gbson "github.com/globalsign/mgo/bson"
+	"github.com/sbunce/bson"
 )
 
-type ValueType = byte
+type (
+	ValueType      = byte
+	ObjectId       = gbson.ObjectId
+	RegEx          = gbson.RegEx
+	DBPointer      = gbson.DBPointer
+	MongoTimestamp = gbson.MongoTimestamp
+	M              = gbson.M
+)
+
+var (
+	Undefined         = gbson.Undefined
+	MinKey            = gbson.MinKey
+	MaxKey            = gbson.MaxKey
+	NewObjectId       = gbson.NewObjectId
+	NewMongoTimestamp = gbson.NewMongoTimestamp
+	Marshal           = gbson.Marshal
+	Unmarshal         = gbson.Unmarshal
+	NewEncoder        = gbson.NewEncoder
+	ReadOne           = bson.ReadOne
+)
 
 const (
 	TypeEmpty       ValueType = iota
@@ -157,9 +177,9 @@ func (v Value) ArrayOf(i int) Value {
 	return BSON(v.valueData).Lookup(strconv.Itoa(i))
 }
 
-func (v Value) Objid() gbson.ObjectId {
+func (v Value) Objid() ObjectId {
 	v.checkType(TypeObjectId)
-	return gbson.ObjectId(v.valueData)
+	return ObjectId(v.valueData)
 }
 
 func (v Value) Bool() bool {
@@ -180,29 +200,29 @@ func (v Value) Time() time.Time {
 	return time.Unix(ns/1e9, ns%1e9)
 }
 
-func (v Value) Regexp() gbson.RegEx {
+func (v Value) Regexp() RegEx {
 	if len(v.valueData) == 0 {
-		return gbson.RegEx{}
+		return RegEx{}
 	}
 	v.checkType(TypeRegex)
 	i := bytes.IndexByte(v.valueData, 0x00)
-	return gbson.RegEx{
+	return RegEx{
 		Pattern: string(v.valueData[:i]),
 		Options: string(v.valueData[i+1 : len(v.valueData)-1]),
 	}
 }
 
-func (v Value) DBPointer() gbson.DBPointer {
+func (v Value) DBPointer() DBPointer {
 	v.checkType(TypeDBPointer)
-	return gbson.DBPointer{
+	return DBPointer{
 		Namespace: string(v.valueData[4 : len(v.valueData)-13]),
-		Id:        gbson.ObjectId(v.valueData[len(v.valueData)-12:]),
+		Id:        ObjectId(v.valueData[len(v.valueData)-12:]),
 	}
 }
 
-func (v Value) MongoTimestamp() gbson.MongoTimestamp {
+func (v Value) MongoTimestamp() MongoTimestamp {
 	v.checkType(TypeTimestamp)
-	return gbson.MongoTimestamp(v.Int64())
+	return MongoTimestamp(v.Int64())
 }
 
 func (v Value) IsNull() bool {
@@ -232,25 +252,16 @@ func (v Value) Binary() Binary {
 	}}
 }
 
-func getint(bs []byte) int {
-	return int(binary.LittleEndian.Uint32(bs))
-}
-
-type Binary struct {
-	gbson.Binary
-}
-
-func (b Binary) MarshalJSON() (bs []byte, err error) {
-	s := base64.StdEncoding.EncodeToString(b.Data)
-	return json.Marshal(s)
-}
-
 func (v Value) MarshalJSON() (bs []byte, err error) {
 	return json.Marshal(v.Value())
 }
 
 func (v Value) MarshalBSON() (bs []byte, err error) {
-	return gbson.Marshal(v.Value())
+	return v.valueData, nil
+}
+
+func (v Value) GetBSON() (interface{}, error) {
+	return v.Value(), nil
 }
 
 func (v Value) Value() (r interface{}) {
@@ -266,7 +277,7 @@ func (v Value) Value() (r interface{}) {
 	case TypeBinary:
 		return v.Binary()
 	case TypeUndefined:
-		return gbson.Undefined
+		return Undefined
 	case TypeObjectId:
 		return v.Objid()
 	case TypeBoolean:
@@ -288,10 +299,23 @@ func (v Value) Value() (r interface{}) {
 	case TypeInt64:
 		return v.Int64()
 	case TypeMinKey:
-		return gbson.MinKey
+		return MinKey
 	case TypeMaxKey:
-		return gbson.MaxKey
+		return MaxKey
 	default:
 		panic(fmt.Sprintf("invalid bson type %#v", v.valueType))
 	}
+}
+
+type Binary struct {
+	gbson.Binary
+}
+
+func (b Binary) MarshalJSON() (bs []byte, err error) {
+	s := base64.StdEncoding.EncodeToString(b.Data)
+	return json.Marshal(s)
+}
+
+func (v Binary) GetBSON() (interface{}, error) {
+	return v.Binary.Data, nil
 }

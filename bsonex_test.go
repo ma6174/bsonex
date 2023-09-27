@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	gbson "github.com/globalsign/mgo/bson"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,29 +43,29 @@ func TestBsonEx(t *testing.T) {
 
 var (
 	now   = time.UnixMilli(time.Now().UnixMilli())
-	ts, _ = gbson.NewMongoTimestamp(now, 1)
-	id    = gbson.NewObjectId()
+	ts, _ = NewMongoTimestamp(now, 1)
+	id    = NewObjectId()
 	doc   = M{
-		"float64":   float64(-7.8),                                        // 0x01
-		"string":    "value of str",                                       // 0x02
-		"doc":       M{"int64": int64(321)},                               // 0x03
-		"array":     []int64{22, 33},                                      // 0x04
-		"binary":    []byte("binary val"),                                 // 0x05
-		"undefined": gbson.Undefined,                                      // 0x06
-		"objid":     gbson.NewObjectId(),                                  // 0x07
-		"true":      true,                                                 // 0x08
-		"false":     false,                                                // 0x08
-		"timestamp": ts,                                                   // 0x09
-		"null":      nil,                                                  // 0x0A
-		"regex":     gbson.RegEx{Pattern: "pattern[a-z]+", Options: "is"}, // 0x0B
-		"DBPointer": gbson.DBPointer{Namespace: "test.rs", Id: id},        // 0x0C
+		"float64":   float64(-7.8),                                  // 0x01
+		"string":    "value of str",                                 // 0x02
+		"doc":       M{"int64": int64(321)},                         // 0x03
+		"array":     []int64{22, 33},                                // 0x04
+		"binary":    []byte("binary val"),                           // 0x05
+		"undefined": Undefined,                                      // 0x06
+		"objid":     NewObjectId(),                                  // 0x07
+		"true":      true,                                           // 0x08
+		"false":     false,                                          // 0x08
+		"timestamp": ts,                                             // 0x09
+		"null":      nil,                                            // 0x0A
+		"regex":     RegEx{Pattern: "pattern[a-z]+", Options: "is"}, // 0x0B
+		"DBPointer": DBPointer{Namespace: "test.rs", Id: id},        // 0x0C
 		// 0x0D JavaScript code
 		"int32": int32(-456), // 0x10
 		"time":  now,         // 0x11
 		"int64": int64(-123), // 0x12
 		// 0x13
-		"min": gbson.MinKey,
-		"max": gbson.MaxKey,
+		"min": MinKey,
+		"max": MaxKey,
 	}
 )
 
@@ -80,6 +79,11 @@ func TestJson(t *testing.T) {
 	bj2, err := json.Marshal(b.ToValueMap())
 	assert.NoError(t, err)
 	assert.Equal(t, string(bj2), b.String())
+	vo, err := Marshal(b.ToValueMap())
+	assert.NoError(t, err)
+	assert.Equal(t, BSON(b).ToValueMap(), BSON(vo).ToValueMap())
+	assert.Equal(t, BSON(b).Map(), BSON(vo).Map())
+	assert.Equal(t, BSON(b).String(), BSON(vo).String())
 }
 
 func TestValueMap(t *testing.T) {
@@ -167,15 +171,15 @@ func TestDo(t *testing.T) {
 
 func TestContains(t *testing.T) {
 	containsCases := map[interface{}]interface{}{
-		"abc": gbson.M{"abc": "def"},
-		"a":   gbson.M{"abc": "def"},
-		"def": gbson.M{"abc": "def"},
-		"d":   gbson.M{"abc": "def"},
-		123:   gbson.M{"abc": 123},
-		3.14:  gbson.M{"abc": 3.14},
+		"abc": M{"abc": "def"},
+		"a":   M{"abc": "def"},
+		"def": M{"abc": "def"},
+		"d":   M{"abc": "def"},
+		123:   M{"abc": 123},
+		3.14:  M{"abc": 3.14},
 	}
 	for k, v := range containsCases {
-		bs, err := gbson.Marshal(v)
+		bs, err := Marshal(v)
 		assert.NoError(t, err)
 		toSearchValue, err := NewToSearchValue(k)
 		assert.NoError(t, err)
@@ -183,8 +187,8 @@ func TestContains(t *testing.T) {
 	}
 	// search doc
 	{
-		doc := gbson.M{"abc": "sdkf"}
-		bs, err := gbson.Marshal(gbson.M{"k": doc})
+		doc := M{"abc": "sdkf"}
+		bs, err := Marshal(M{"k": doc})
 		assert.NoError(t, err)
 		toSearchValue, err := NewToSearchValue(doc)
 		assert.NoError(t, err)
